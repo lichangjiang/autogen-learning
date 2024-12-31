@@ -331,6 +331,9 @@ def execute_function(self, func_call, verbose: bool = False) -> Tuple[bool, Dict
 ### `ConversableAgent` 类的 `register_reply` 方法
 
 ```python
+        self.register_reply([Agent, None], ConversableAgent.generate_oai_reply)
+        self.register_reply([Agent, None], ConversableAgent.a_generate_oai_reply, ignore_async_in_sync_chat=True)
+
         self.register_reply([Agent, None], ConversableAgent.generate_tool_calls_reply)
         self.register_reply([Agent, None], ConversableAgent.a_generate_tool_calls_reply, ignore_async_in_sync_chat=True)
         self.register_reply([Agent, None], ConversableAgent.generate_function_call_reply)
@@ -399,3 +402,93 @@ def register_reply(
 
 #### 总结
 `register_reply` 方法为 `ConversableAgent` 提供了灵活的消息处理机制，允许开发者根据不同的触发条件注册多个回复函数。这种设计使得代理能够动态响应来自不同发送者的消息，并根据具体情况执行相应的处理逻辑，增强了代理的灵活性和可扩展性。
+
+
+
+```python
+cathy = ConversableAgent(
+    "cathy",
+    system_message="Your name is Cathy and you are a part of a duo of comedians.",
+    llm_config={"config_list": [{"model": "gpt-4", "temperature": 0.9, "api_key": os.environ.get("OPENAI_API_KEY")}]},
+    human_input_mode="NEVER",  # Never ask for human input.
+)
+
+joe = ConversableAgent(
+    "joe",
+    system_message="Your name is Joe and you are a part of a duo of comedians.",
+    llm_config={"config_list": [{"model": "gpt-4", "temperature": 0.7, "api_key": os.environ.get("OPENAI_API_KEY")}]},
+    human_input_mode="NEVER",  # Never ask for human input.
+)
+
+result = joe.initiate_chat(cathy, message="Cathy, tell me a joke.", max_turns=2)
+```
+```
+joe.initiate_chat -> 
+   self.send(msg2send, recipient, request_reply=True, silent=silent) [self is joe] ->
+      valid = self._append_oai_message(message, "assistant", recipient, is_sending=True) [self is joe] ->
+          self._oai_messages[conversation_id].append(oai_message) [conversation_id is recipient (cathy)]
+      recipient.receive(message, self, request_reply, silent) [recipient is cathy] ->  
+         reply = self.generate_reply(messages=self.chat_messages[sender], sender=sender) [self is cathy] -> 
+                if self._match_trigger(reply_func_tuple["trigger"], sender):
+                    final, reply = reply_func(self, messages=messages, sender=sender, config=reply_func_tuple["config"])
+                     =================================================================
+                     # reply_func include below registered functions:
+                     self.register_reply([Agent, None], ConversableAgent.generate_oai_reply)
+                     self.register_reply([Agent, None], ConversableAgent.a_generate_oai_reply, ignore_async_in_sync_chat=True)
+
+                     self.register_reply([Agent, None], ConversableAgent.generate_tool_calls_reply)
+                     self.register_reply([Agent, None], ConversableAgent.a_generate_tool_calls_reply, ignore_async_in_sync_chat=True)
+                     self.register_reply([Agent, None], ConversableAgent.generate_function_call_reply)
+                     self.register_reply(
+                           [Agent, None], ConversableAgent.a_generate_function_call_reply, ignore_async_in_sync_chat=True
+                     )
+                     self.register_reply([Agent, None], ConversableAgent.check_termination_and_human_reply)
+                     self.register_reply(
+                           [Agent, None], ConversableAgent.a_check_termination_and_human_reply, ignore_async_in_sync_chat=True
+                     )
+                     =================================================================
+         if reply is not None:
+            self.send(reply, sender, silent=silent) [self is cathy] ->
+
+loop the above process
+```
+
+### AI Agent 交互过程分析
+
+以下时序图展示了两个 AI Agent (Joe 和 Cathy) 之间的交互过程：
+
+```plantuml
+@startuml
+participant Joe as "Joe\n(ConversableAgent)"
+participant Cathy as "Cathy\n(ConversableAgent)"
+
+== 初始化对话 ==
+Joe -> Joe: initiate_chat(recipient=Cathy,\nmessage="Cathy, tell me a joke.")
+
+== 消息发送阶段 ==
+Joe -> Joe: _append_oai_message\n(添加消息到对话历史)
+Joe -> Cathy: receive(message,\nsender=Joe)
+
+== 消息处理和回复阶段 ==
+Cathy -> Cathy: generate_reply(messages,\nsender=Joe)
+activate Cathy
+note right of Cathy
+  1. 检查注册的回复函数
+  2. 匹配触发条件
+  3. 执行回复函数生成回复
+end note
+Cathy --> Joe: reply
+deactivate Cathy
+
+== 继续对话 ==
+Joe -> Joe: generate_reply(messages,\nsender=Cathy)
+activate Joe
+note left of Joe
+  处理 Cathy 的回复
+  并决定是否继续对话
+end note
+Joe --> Cathy: 继续对话或结束
+deactivate Joe
+
+@enduml
+```
