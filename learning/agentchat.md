@@ -109,7 +109,6 @@ class AssistantAgent {
 
 class UserProxyAgent {
 }
-}
 
 Agent <|-- LLMAgent
 LLMAgent <|-- ConversableAgent
