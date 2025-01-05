@@ -463,8 +463,10 @@ participant Cathy as "Cathy\n(ConversableAgent)"
 
 == 初始化对话 ==
 Joe -> Joe: initiate_chat(recipient=Cathy,\nmessage="Cathy, tell me a joke.")
-
+activate Joe
+loop 任务完成或达到最大回复次数
 == 消息发送阶段 ==
+Joe -> Joe: send
 Joe -> Joe: _append_oai_message\n(添加消息到对话历史)
 Joe -> Cathy: receive(message,\nsender=Joe)
 
@@ -475,11 +477,16 @@ note right of Cathy
   1. 检查注册的回复函数
   2. 匹配触发条件
   3. 执行回复函数生成回复
+      ConversableAgent.generate_oai_reply：调用模型生成回复
+      ConversableAgent.generate_tool_calls_reply：调用工具方法
+      ConversableAgent.generate_function_call_reply：调用工具方法(过时)
+      ConversableAgent.check_termination_and_human_reply：检查终止消息
 end note
-Cathy --> Joe: reply
+Cathy --> Joe: send reply
 deactivate Cathy
 
 == 继续对话 ==
+Cathy -> Joe: receive
 Joe -> Joe: generate_reply(messages,\nsender=Cathy)
 activate Joe
 note left of Joe
@@ -487,6 +494,7 @@ note left of Joe
   并决定是否继续对话
 end note
 Joe --> Cathy: 继续对话或结束
+end
 deactivate Joe
 
 @enduml
